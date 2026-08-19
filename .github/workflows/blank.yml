@@ -1,4 +1,4 @@
-Name: Build Android APK
+name: Build Android APK
 
 on:
   push:
@@ -30,16 +30,12 @@ jobs:
     - name: Unzip Source Code & Fix Executable Permissions
       run: |
         unzip -o "e-tyllo (4).zip" -d extracted_app
-        # Make gradlew executable across any extracted folder structure
         find extracted_app -name "gradlew" -exec chmod +x {} +
 
     - name: Build APK with Gradle Wrapper
       run: |
-        # Locate the exact directory containing gradlew wrapper
         GRADLE_DIR=$(find extracted_app -name "gradlew" -exec dirname {} \; | head -n 1)
         cd "$GRADLE_DIR"
-        
-        # Use project wrapper instead of global system gradle
         ./gradlew assembleDebug --stacktrace --no-daemon
 
     - name: Upload APK Artifact
@@ -47,31 +43,4 @@ jobs:
       with:
         name: Etyllo-Expense-APK
         path: extracted_app/**/build/outputs/apk/debug/*.apk
-      run: |
-        # Locate the exact directory containing gradlew wrapper
-        GRADLE_DIR=$(find extracted_app -name "gradlew" -exec dirname {} \; | head -n 1)
-        cd "$GRADLE_DIR"
         
-        # Use project wrapper instead of global system gradle
-        ./gradlew assembleDebug --stacktrace --no-daemon
-
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: Etyllo-Expense-APK
-        path: extracted_app/**/build/outputs/apk/debug/*.apk
-      run: |
-        # Locate the exact directory containing gradlew wrapper
-        GRADLE_DIR=$(find extracted_app -name "gradlew" -exec dirname {} \; | head -n 1)
-        cd "$GRADLE_DIR"
-        
-        # Use project wrapper instead of global system gradle
-        ./gradlew assembleDebug --stacktrace --no-daemon
-
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: Etyllo-Expense-APK
-        path: extracted_app/**/build/outputs/apk/debug/*.apk
-        name: Etyllo-Expense-APK  
-        path: extracted_app/app/build/outputs/apk/debug/*.apk
