@@ -25,34 +25,27 @@ jobs:
     - name: Unzip Source Code Safely
       run: |
         unzip -o "e-tyllo (4).zip" -d extracted_app
-        find extracted_app -name "gradlew" -exec chmod +x {} +
 
-    - name: Generate Keystore in All Expected Locations
+    - name: Generate Keystore in Expected Locations
       run: |
-        # 1. Default Android SDK location
         mkdir -p ~/.android
         keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-        
-        # 2. Extracted root directory (where build.gradle is expecting it)
         cp ~/.android/debug.keystore extracted_app/debug.keystore
-        
-        # 3. Inside app module directory (just in case)
         mkdir -p extracted_app/app
         cp ~/.android/debug.keystore extracted_app/app/debug.keystore
 
-    - name: Build APK
+    - name: Build APK with Compatible Gradle 8.5
       run: |
         PROJECT_ROOT=$(find extracted_app -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -exec dirname {} \; | head -n 1)
         echo "Root Project Directory found at: $PROJECT_ROOT"
         cd "$PROJECT_ROOT"
 
-        if [ -f "./gradlew" ]; then
-          echo "Building with Gradle Wrapper..."
-          ./gradlew assembleDebug --no-daemon --stacktrace
-        else
-          echo "Building with Global Gradle..."
-          gradle assembleDebug --no-daemon --stacktrace
-        fi
+        # Force setup Gradle Wrapper 8.5 for Kotlin/Compose compatibility
+        gradle wrapper --gradle-version 8.5
+        chmod +x gradlew
+
+        # Execute build using wrapper
+        ./gradlew assembleDebug --no-daemon --stacktrace
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
