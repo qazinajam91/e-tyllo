@@ -21,7 +21,7 @@ jobs:
 
     - name: Unzip source code & Generate Keystore
       run: |
-        unzip -o "e-tyllo (3).zip" -d extracted_app
+        unzip -o "e-tyllo (4).zip" -d extracted_app
         
         # Generate missing debug.keystore automatically
         keytool -genkey -v -keystore extracted_app/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
