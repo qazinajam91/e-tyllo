@@ -27,16 +27,30 @@ jobs:
         mkdir -p ~/.android
         keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
 
-    - name: Unzip Source Code & Fix Executable Permissions
+    - name: Unzip Source Code Safely
       run: |
+        # Use quotes around filename to safely handle space and parentheses
         unzip -o "e-tyllo (4).zip" -d extracted_app
+        
+        # Grant executable permissions to gradlew if exists
         find extracted_app -name "gradlew" -exec chmod +x {} +
 
-    - name: Build APK with Gradle Wrapper
+    - name: Build APK
       run: |
-        GRADLE_DIR=$(find extracted_app -name "gradlew" -exec dirname {} \; | head -n 1)
-        cd "$GRADLE_DIR"
-        ./gradlew assembleDebug --stacktrace --no-daemon
+        # Dynamically locate the directory that contains settings.gradle / settings.gradle.kts
+        PROJECT_ROOT=$(find extracted_app -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -exec dirname {} \; | head -n 1)
+        
+        echo "Root Project Directory found at: $PROJECT_ROOT"
+        cd "$PROJECT_ROOT"
+
+        # Check if gradlew exists, otherwise use global gradle
+        if [ -f "./gradlew" ]; then
+          echo "Building with Gradle Wrapper..."
+          ./gradlew assembleDebug --no-daemon --stacktrace
+        else
+          echo "Building with Global Gradle..."
+          gradle assembleDebug --no-daemon --stacktrace
+        fi
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
