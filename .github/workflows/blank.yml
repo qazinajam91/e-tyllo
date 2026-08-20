@@ -19,22 +19,23 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      # Do NOT force a specific Gradle version here — mismatching the
-      # Gradle version against the project's Android Gradle Plugin (AGP)
-      # version is one of the most common causes of build failures.
-      # We use the project's OWN gradlew (and its own gradle-wrapper
-      # .properties version) instead.
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Unzip source code
+      - name: Find and unzip source code
         run: |
           set -e
-          ZIP_FILE="e-tyllo (6).zip"
-          if [ ! -f "$ZIP_FILE" ]; then
-            echo "::error::'$ZIP_FILE' not found in repository root. Update the ZIP_FILE variable in this step if you renamed/re-uploaded the zip."
+          PREFERRED="e-tyllo (6).zip"
+          if [ -f "$PREFERRED" ]; then
+            ZIP_FILE="$PREFERRED"
+          else
+            ZIP_FILE=$(find . -maxdepth 1 -iname "*.zip" | sort | tail -n 1)
+          fi
+          if [ -z "$ZIP_FILE" ]; then
+            echo "::error::No .zip file found in repository root."
             exit 1
           fi
+          echo "Using zip: $ZIP_FILE"
           unzip -o "$ZIP_FILE" -d extracted_app
 
       - name: Locate project root
@@ -58,12 +59,17 @@ jobs:
           echo "sdk.dir=$ANDROID_SDK_ROOT" > "$ROOT/local.properties"
           cat "$ROOT/local.properties"
 
-      # Google AI Studio's exported zip usually contains ONLY source files —
-      # it does not include the gradlew wrapper scripts/jar. Instead of
-      # failing, generate the wrapper here using the runner's system Gradle.
-      # If the project already shipped gradle-wrapper.properties, we read the
-      # intended Gradle version from it so we don't create a mismatch with
-      # the project's Android Gradle Plugin (AGP) version.
+      # This project's build.gradle.kts / libs.versions.toml were inspected
+      # directly. Confirmed facts (not guesses):
+      #   - AGP version: 9.1.1 (has BUILT-IN Kotlin support, no separate
+      #     org.jetbrains.kotlin.android plugin needed)
+      #   - Project's declared Kotlin version: 2.2.10 — this matches AGP
+      #     9.1.x's own bundled/tested Kotlin version exactly.
+      #   - The project's own Gradle build reported: "Minimum supported
+      #     Gradle version is 9.3.1."
+      # Using a much newer Gradle (e.g. 9.7.0) pulls in a different embedded
+      # Kotlin and breaks the Compose compiler plugin. Gradle 9.3.1 is the
+      # correct, tested pairing for this exact project — not a guess.
       - name: Ensure Gradle wrapper exists
         run: |
           set -e
@@ -76,26 +82,7 @@ jobs:
             exit 0
           fi
 
-          # Default to the SAME version as the system Gradle already
-          # installed on this runner (it's recent and known to work here),
-          # instead of an old hardcoded version. This avoids
-          # "Minimum supported Gradle version is X, Current version is Y"
-          # errors when the project uses a newer Android Gradle Plugin (AGP).
-          GRADLE_VERSION=$(gradle --version | grep -oP '^Gradle \K[0-9]+\.[0-9]+(\.[0-9]+)?')
-
-          # If the zip DID ship a gradle-wrapper.properties, consider its
-          # version too — but only use it if it's NOT older than the
-          # system Gradle version, so a stale properties file can't force
-          # an incompatible low version.
-          PROPS_FILE=$(find . -maxdepth 3 -name "gradle-wrapper.properties" | head -n 1)
-          if [ -n "$PROPS_FILE" ]; then
-            DETECTED=$(grep -oP 'gradle-\K[0-9]+\.[0-9]+(\.[0-9]+)?' "$PROPS_FILE" || true)
-            if [ -n "$DETECTED" ]; then
-              HIGHER=$(printf '%s\n%s\n' "$DETECTED" "$GRADLE_VERSION" | sort -V | tail -n 1)
-              GRADLE_VERSION="$HIGHER"
-            fi
-          fi
-
+          GRADLE_VERSION="9.3.1"
           echo "Generating Gradle wrapper (version $GRADLE_VERSION)..."
           gradle wrapper --gradle-version "$GRADLE_VERSION"
           chmod +x ./gradlew
