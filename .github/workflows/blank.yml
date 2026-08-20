@@ -76,12 +76,23 @@ jobs:
             exit 0
           fi
 
-          GRADLE_VERSION="8.7"
+          # Default to the SAME version as the system Gradle already
+          # installed on this runner (it's recent and known to work here),
+          # instead of an old hardcoded version. This avoids
+          # "Minimum supported Gradle version is X, Current version is Y"
+          # errors when the project uses a newer Android Gradle Plugin (AGP).
+          GRADLE_VERSION=$(gradle --version | grep -oP '^Gradle \K[0-9]+\.[0-9]+(\.[0-9]+)?')
+
+          # If the zip DID ship a gradle-wrapper.properties, consider its
+          # version too — but only use it if it's NOT older than the
+          # system Gradle version, so a stale properties file can't force
+          # an incompatible low version.
           PROPS_FILE=$(find . -maxdepth 3 -name "gradle-wrapper.properties" | head -n 1)
           if [ -n "$PROPS_FILE" ]; then
             DETECTED=$(grep -oP 'gradle-\K[0-9]+\.[0-9]+(\.[0-9]+)?' "$PROPS_FILE" || true)
             if [ -n "$DETECTED" ]; then
-              GRADLE_VERSION="$DETECTED"
+              HIGHER=$(printf '%s\n%s\n' "$DETECTED" "$GRADLE_VERSION" | sort -V | tail -n 1)
+              GRADLE_VERSION="$HIGHER"
             fi
           fi
 
