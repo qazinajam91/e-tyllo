@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build E Tyllo Android APK
 
 on:
   push:
@@ -24,32 +24,36 @@ jobs:
 
     - name: Unzip Source Code Safely
       run: |
+        # Safely unzip using quotes for space and brackets in filename
         unzip -o "e-tyllo (4).zip" -d extracted_app
 
-    - name: Generate Keystore in Expected Locations
+    - name: Generate Keystore for Signing
       run: |
         mkdir -p ~/.android
         keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-        cp ~/.android/debug.keystore extracted_app/debug.keystore
-        mkdir -p extracted_app/app
-        cp ~/.android/debug.keystore extracted_app/app/debug.keystore
-
-    - name: Build APK with Compatible Gradle 8.5
-      run: |
+        
+        # Locate project root directory dynamically
         PROJECT_ROOT=$(find extracted_app -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -exec dirname {} \; | head -n 1)
-        echo "Root Project Directory found at: $PROJECT_ROOT"
-        cd "$PROJECT_ROOT"
+        
+        # Place keystore in project root and app directory to satisfy any build.gradle config
+        cp ~/.android/debug.keystore "$PROJECT_ROOT/debug.keystore"
+        mkdir -p "$PROJECT_ROOT/app"
+        cp ~/.android/debug.keystore "$PROJECT_ROOT/app/debug.keystore"
 
-        # Force setup Gradle Wrapper 8.5 for Kotlin/Compose compatibility
-        gradle wrapper --gradle-version 8.5
-        chmod +x gradlew
-
-        # Execute build using wrapper
-        ./gradlew assembleDebug --no-daemon --stacktrace
+    - name: Setup Gradle 8.7 & Build APK
+      uses: gradle/gradle-build-action@v3
+      with:
+        gradle-version: '8.7'
+        arguments: |
+          assembleDebug 
+          --no-daemon 
+          --stacktrace 
+          -Pandroid.experimental.artificiallyEnableGms=true
+        build-root-directory: extracted_app
 
     - name: Upload APK Artifact
       uses: actions/upload-artifact@v4
       with:
-        name: Etyllo-Expense-APK
+        name: E-Tyllo-Debug-APK
         path: extracted_app/**/build/outputs/apk/debug/*.apk
         
