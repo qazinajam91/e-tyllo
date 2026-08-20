@@ -30,7 +30,7 @@ jobs:
       - name: Unzip source code
         run: |
           set -e
-          ZIP_FILE="e-tyllo (4).zip"
+          ZIP_FILE="e-tyllo (6).zip"
           if [ ! -f "$ZIP_FILE" ]; then
             echo "::error::'$ZIP_FILE' not found in repository root. Update the ZIP_FILE variable in this step if you renamed/re-uploaded the zip."
             exit 1
