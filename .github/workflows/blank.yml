@@ -100,6 +100,23 @@ jobs:
           gradle wrapper --gradle-version "$GRADLE_VERSION"
           chmod +x ./gradlew
 
+      - name: Generate debug keystore
+        run: |
+          set -e
+          ROOT="${{ steps.locate.outputs.project_root }}"
+          mkdir -p ~/.android
+          if [ ! -f ~/.android/debug.keystore ]; then
+            keytool -genkey -v -keystore ~/.android/debug.keystore \
+              -storepass android -alias androiddebugkey -keypass android \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -dname "CN=Android Debug,O=Android,C=US"
+          fi
+          # The project's build.gradle.kts looks for debug.keystore at the
+          # project root (relative path). Place a copy there so
+          # ':app:validateSigningDebug' finds it.
+          cp ~/.android/debug.keystore "$ROOT/debug.keystore"
+          cp ~/.android/debug.keystore "$ROOT/app/debug.keystore" 2>/dev/null || true
+
       - name: Build APK with the project's own Gradle wrapper
         working-directory: ${{ steps.locate.outputs.project_root }}
         run: ./gradlew assembleDebug --no-daemon --stacktrace
