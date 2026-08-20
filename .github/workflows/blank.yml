@@ -58,14 +58,36 @@ jobs:
           echo "sdk.dir=$ANDROID_SDK_ROOT" > "$ROOT/local.properties"
           cat "$ROOT/local.properties"
 
-      - name: Grant execute permission to gradlew
+      # Google AI Studio's exported zip usually contains ONLY source files —
+      # it does not include the gradlew wrapper scripts/jar. Instead of
+      # failing, generate the wrapper here using the runner's system Gradle.
+      # If the project already shipped gradle-wrapper.properties, we read the
+      # intended Gradle version from it so we don't create a mismatch with
+      # the project's Android Gradle Plugin (AGP) version.
+      - name: Ensure Gradle wrapper exists
         run: |
+          set -e
           ROOT="${{ steps.locate.outputs.project_root }}"
-          if [ ! -f "$ROOT/gradlew" ]; then
-            echo "::error::gradlew not found in project root. The zip must include the Gradle wrapper (gradlew, gradlew.bat, gradle/wrapper/*)."
-            exit 1
+          cd "$ROOT"
+
+          if [ -f "./gradlew" ]; then
+            echo "gradlew already present in zip."
+            chmod +x ./gradlew
+            exit 0
           fi
-          chmod +x "$ROOT/gradlew"
+
+          GRADLE_VERSION="8.7"
+          PROPS_FILE=$(find . -maxdepth 3 -name "gradle-wrapper.properties" | head -n 1)
+          if [ -n "$PROPS_FILE" ]; then
+            DETECTED=$(grep -oP 'gradle-\K[0-9]+\.[0-9]+(\.[0-9]+)?' "$PROPS_FILE" || true)
+            if [ -n "$DETECTED" ]; then
+              GRADLE_VERSION="$DETECTED"
+            fi
+          fi
+
+          echo "Generating Gradle wrapper (version $GRADLE_VERSION)..."
+          gradle wrapper --gradle-version "$GRADLE_VERSION"
+          chmod +x ./gradlew
 
       - name: Build APK with the project's own Gradle wrapper
         working-directory: ${{ steps.locate.outputs.project_root }}
