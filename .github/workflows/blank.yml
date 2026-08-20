@@ -1,4 +1,4 @@
-name: Build E Tyllo Android APK
+name: Build Android APK
 
 on:
   push:
@@ -10,50 +10,71 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
+      # Do NOT force a specific Gradle version here — mismatching the
+      # Gradle version against the project's Android Gradle Plugin (AGP)
+      # version is one of the most common causes of build failures.
+      # We use the project's OWN gradlew (and its own gradle-wrapper
+      # .properties version) instead.
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
 
-    - name: Unzip Source Code Safely
-      run: |
-        # Safely unzip using quotes for space and brackets in filename
-        unzip -o "e-tyllo (4).zip" -d extracted_app
+      - name: Unzip source code
+        run: |
+          set -e
+          ZIP_FILE="e-tyllo (4).zip"
+          if [ ! -f "$ZIP_FILE" ]; then
+            echo "::error::'$ZIP_FILE' not found in repository root. Update the ZIP_FILE variable in this step if you renamed/re-uploaded the zip."
+            exit 1
+          fi
+          unzip -o "$ZIP_FILE" -d extracted_app
 
-    - name: Generate Keystore for Signing
-      run: |
-        mkdir -p ~/.android
-        keytool -genkey -v -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-        
-        # Locate project root directory dynamically
-        PROJECT_ROOT=$(find extracted_app -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -exec dirname {} \; | head -n 1)
-        
-        # Place keystore in project root and app directory to satisfy any build.gradle config
-        cp ~/.android/debug.keystore "$PROJECT_ROOT/debug.keystore"
-        mkdir -p "$PROJECT_ROOT/app"
-        cp ~/.android/debug.keystore "$PROJECT_ROOT/app/debug.keystore"
+      - name: Locate project root
+        id: locate
+        run: |
+          set -e
+          PROJECT_ROOT=$(find extracted_app -maxdepth 4 -type f \( -name "settings.gradle" -o -name "settings.gradle.kts" \) -exec dirname {} \; | head -n 1)
+          if [ -z "$PROJECT_ROOT" ]; then
+            echo "::error::Could not find settings.gradle(.kts) inside the extracted zip. Check the zip structure."
+            exit 1
+          fi
+          echo "Root Project Directory found at: $PROJECT_ROOT"
+          echo "project_root=$PROJECT_ROOT" >> "$GITHUB_OUTPUT"
 
-    - name: Setup Gradle 8.7 & Build APK
-      uses: gradle/gradle-build-action@v3
-      with:
-        gradle-version: '8.7'
-        arguments: |
-          assembleDebug 
-          --no-daemon 
-          --stacktrace 
-          -Pandroid.experimental.artificiallyEnableGms=true
-        build-root-directory: extracted_app
+      - name: Verify required config files (google-services.json, local.properties)
+        run: |
+          ROOT="${{ steps.locate.outputs.project_root }}"
+          if ! find "$ROOT" -iname "google-services.json" | grep -q .; then
+            echo "::warning::google-services.json not found anywhere in the project. Since this app uses Firebase, the build WILL fail at the Google Services Gradle plugin step unless this file is added to the app/ module folder before zipping."
+          fi
+          echo "sdk.dir=$ANDROID_SDK_ROOT" > "$ROOT/local.properties"
+          cat "$ROOT/local.properties"
 
-    - name: Upload APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: E-Tyllo-Debug-APK
-        path: extracted_app/**/build/outputs/apk/debug/*.apk
-        
+      - name: Grant execute permission to gradlew
+        run: |
+          ROOT="${{ steps.locate.outputs.project_root }}"
+          if [ ! -f "$ROOT/gradlew" ]; then
+            echo "::error::gradlew not found in project root. The zip must include the Gradle wrapper (gradlew, gradlew.bat, gradle/wrapper/*)."
+            exit 1
+          fi
+          chmod +x "$ROOT/gradlew"
+
+      - name: Build APK with the project's own Gradle wrapper
+        working-directory: ${{ steps.locate.outputs.project_root }}
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      - name: Upload APK Artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Etyllo-Expense-APK
+          path: ${{ steps.locate.outputs.project_root }}/**/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
