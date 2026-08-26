@@ -25,7 +25,7 @@ jobs:
       - name: Find and unzip source code
         run: |
           set -e
-          PREFERRED="e-tyllo (11).zip"
+          PREFERRED="e-tyllo (06).zip"
           if [ -f "$PREFERRED" ]; then
             ZIP_FILE="$PREFERRED"
           else
